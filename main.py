@@ -3,43 +3,52 @@ import pandas as pd
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import matplotlib.pyplot as plt
+import uuid
 
 # Configurações do OAuth Spotify
-SPOTIFY_CLIENT_ID = "SEU_CLIENT_ID"  # Substitua pelo seu Client ID
-SPOTIFY_CLIENT_SECRET = "SEU_CLIENT_SECRET"  # Substitua pelo seu Client Secret
-SPOTIFY_REDIRECT_URI = "http://localhost:8501"  # Certifique-se de usar este Redirect URI
+SPOTIFY_CLIENT_ID = "fa95b32491d048ae9762bf882e9c33c9"  # Substitua pelo seu Client ID
+SPOTIFY_CLIENT_SECRET = "7dfc7349c85f44f3b1d6d36cf93c5541"  # Substitua pelo seu Client Secret
+SPOTIFY_REDIRECT_URI = "http://localhost:8501"  # Use este Redirect URI no Spotify
 SCOPE = "user-top-read"  # Escopo necessário para acessar músicas mais ouvidas do usuário
 
 
-# Função para autenticar e criar uma instância do cliente Spotify
+def get_cache_path_for_user():
+    """
+    Cria um identificador exclusivo para o token de autenticação do Spotify.
+    Isto assegura que múltiplos usuários tenham sessões separadas.
+    """
+    if "session_id" not in st.session_state:
+        # Gera um ID de sessão exclusivo para cada usuário
+        st.session_state["session_id"] = str(uuid.uuid4())
+
+    # Cada sessão terá um caminho de cache único
+    return f".cache-{st.session_state['session_id']}"
+
+
 def authenticate_user():
     """
-    Realiza a autenticação do usuário no Spotify e retorna um objeto Spotipy autenticado.
+    Realiza a autenticação do usuário no Spotify.
+    Cada usuário terá seu próprio cache isolado.
     """
-    if "token_cache" not in st.session_state:
-        st.session_state.token_cache = None  # Inicializa o cache na sessão
+    # Define o caminho do cache específico para a sessão
+    cache_path = get_cache_path_for_user()
 
-    # Configura o SpotifyOAuth com cache específico para cada usuário
+    # Configura o SpotifyOAuth com o cache exclusivo
     auth_manager = SpotifyOAuth(
         client_id=SPOTIFY_CLIENT_ID,
         client_secret=SPOTIFY_CLIENT_SECRET,
         redirect_uri=SPOTIFY_REDIRECT_URI,
         scope=SCOPE,
-        cache_path=None,  # Evita salvar cache localmente
+        cache_path=cache_path,
     )
 
-    # Sincroniza o cache do SpotifyOAuth com o `st.session_state`
-    auth_manager.cache_handler.token_info = st.session_state.token_cache
-
+    # Verifica ou solicita o login
     if not auth_manager.get_cached_token():
-        # Realiza a autenticação caso o token de acesso não esteja no cache
-        token = auth_manager.get_access_token(as_dict=False)
-        st.session_state.token_cache = auth_manager.cache_handler.token_info
+        auth_manager.get_access_token(as_dict=False)
 
     return spotipy.Spotify(auth_manager=auth_manager)
 
 
-# Função para recuperar as 10 músicas mais ouvidas do usuário
 def get_user_top_tracks(sp):
     """
     Retorna um dataframe com as 10 músicas mais ouvidas do usuário, incluindo:
@@ -62,7 +71,6 @@ def get_user_top_tracks(sp):
         return pd.DataFrame()
 
 
-# Função para exibir o gráfico de pizza com base nas músicas mais ouvidas
 def plot_pie_chart(df):
     """
     Cria um gráfico de pizza com base na popularidade das músicas mais ouvidas.
@@ -80,11 +88,26 @@ def plot_pie_chart(df):
     st.pyplot(plt)
 
 
-# Função principal
+def clear_cache():
+    """
+    Remove o cache da sessão atual do usuário, bem como o estado armazenado.
+    """
+    if "session_id" in st.session_state:
+        cache_file = f".cache-{st.session_state['session_id']}"
+        try:
+            import os
+            os.remove(cache_file)  # Remove o cache específico da sessão
+        except FileNotFoundError:
+            pass
+    # Limpa todo o estado da sessão
+    st.session_state.clear()
+
+
 def main():
+    # Configura o título do app
     st.title("🎶 Spotify Analytics")
 
-    # Verifica se o usuário está autenticado
+    # Controle de login
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
@@ -94,16 +117,17 @@ def main():
         st.write("Faça login para acessar suas músicas mais ouvidas no Spotify.")
         if st.button("Login com Spotify"):
             try:
+                # Realiza autenticação
                 sp = authenticate_user()
                 st.session_state["spotify_client"] = sp
                 st.session_state["authenticated"] = True
-                st.query_params(page="home")  # Atualiza estado para trocar a página
+                st.success("Login realizado com sucesso!")
             except Exception as e:
                 st.error("Erro durante o processo de login. Tente novamente.")
                 st.error(str(e))
-        return
+        return  # Encerrar execução aqui se o usuário ainda não estiver autenticado
 
-    # Exibição dos dados do Spotify
+    # Usuário autenticado
     sp = st.session_state["spotify_client"]
 
     # Exibe dados do usuário conectado
@@ -116,15 +140,14 @@ def main():
         st.error(str(e))
         return
 
-    # Buscar músicas mais ouvidas
+    # Buscar e exibir músicas mais ouvidas
     st.subheader("🎵 Suas Músicas Mais Ouvidas (últimos 30 dias)")
     top_tracks_df = get_user_top_tracks(sp)
 
     if not top_tracks_df.empty:
-        # Exibe as músicas em uma tabela
         st.dataframe(top_tracks_df, use_container_width=True)
 
-        # Cria um gráfico de pizza
+        # Gráfico de popularidade
         st.subheader("📊 Popularidade das Top 10 Músicas")
         plot_pie_chart(top_tracks_df)
     else:
@@ -132,12 +155,9 @@ def main():
 
     # Botão de logout
     if st.button("🔒 Logout"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.warning(
-            "Você foi desconectado! Recarregue a página ou clique [aqui](http://localhost:8501) para voltar ao login.")
+        clear_cache()
+        st.warning("Você foi desconectado! Atualize a página para realizar login novamente.")
 
 
-# Executa o aplicativo
 if __name__ == "__main__":
     main()
