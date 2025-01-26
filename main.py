@@ -4,17 +4,16 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import matplotlib.pyplot as plt
 
-# Configurações OAuth do Spotify
-SPOTIFY_CLIENT_ID = "fa95b32491d048ae9762bf882e9c33c9"  # Substitua pelo seu Client ID
-SPOTIFY_CLIENT_SECRET = "7dfc7349c85f44f3b1d6d36cf93c5541"  # Substitua pelo seu Client Secret
+# Configurações do OAuth Spotify
+SPOTIFY_CLIENT_ID = "SEU_CLIENT_ID"  # Substitua pelo seu Client ID
+SPOTIFY_CLIENT_SECRET = "SEU_CLIENT_SECRET"  # Substitua pelo seu Client Secret
 SPOTIFY_REDIRECT_URI = "http://localhost:8501"  # Certifique-se de usar este Redirect URI
-SCOPE = "user-top-read"  # Escopo necessário para acessar as músicas mais ouvidas do usuário
+SCOPE = "user-top-read"  # Escopo necessário para acessar músicas mais ouvidas do usuário
 
 st.set_page_config(page_title="Spotify Analytics", layout="wide")
 
 
 # Função para autenticar o usuário e acessar a API Spotify
-@st.cache_resource
 def authenticate_spotify():
     """
     Autentica e cria um cliente Spotify usando Authorization Code Flow.
@@ -24,6 +23,7 @@ def authenticate_spotify():
         client_secret=SPOTIFY_CLIENT_SECRET,
         redirect_uri=SPOTIFY_REDIRECT_URI,
         scope=SCOPE,
+        show_dialog=True  # Sempre mostrar a janela de login para novos usuários
     )
     sp = spotipy.Spotify(auth_manager=auth_manager)
     return sp
@@ -32,7 +32,7 @@ def authenticate_spotify():
 # Função para buscar as 10 músicas mais ouvidas do usuário
 def get_user_top_tracks(sp):
     """
-    Retorna um dataframe das 10 músicas mais ouvidas pelo usuário, incluindo:
+    Retorna um DataFrame das 10 músicas mais ouvidas pelo usuário, incluindo:
     - Nome da música
     - Artista(s) principal(is)
     - Popularidade da música
@@ -50,7 +50,7 @@ def get_user_top_tracks(sp):
         df = pd.DataFrame(track_data)
         return df
 
-    except spotipy.exceptions.SpotifyException as e:
+    except Exception as e:
         st.error(f"Erro ao acessar a API do Spotify: {e}")
         return pd.DataFrame()
 
@@ -73,21 +73,42 @@ def plot_pie_chart(df):
     st.pyplot(plt)
 
 
+# Configuração do estado da sessão para armazenar dados individuais
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "spotify_client" not in st.session_state:
+    st.session_state["spotify_client"] = None
+
+
 # Função principal da aplicação
 def main():
     st.title("🎶 Spotify Analytics")
-    st.write("Autentique-se no Spotify para ver suas 10 músicas mais ouvidas e um gráfico da sua popularidade.")
+    st.write(
+        "💻 Uma ferramenta que permite múltiplos usuários visualizar suas próprias músicas mais ouvidas no Spotify.")
 
-    # Autenticação do usuário no Spotify
-    sp = authenticate_spotify()
+    # Autenticação condicional com o Spotify
+    if not st.session_state["authenticated"]:
+        with st.spinner("Aguardando autenticação..."):
+            try:
+                sp = authenticate_spotify()
+                st.session_state["spotify_client"] = sp
+                st.session_state["authenticated"] = True
+                st.success("✅ Autenticado com sucesso!")
+                st.query_params  # Remove parâmetros extras da URL
+            except Exception as e:
+                st.error("Erro na autenticação. Por favor, tente novamente.")
+                st.error(str(e))
+                return
+    else:
+        sp = st.session_state["spotify_client"]
 
-    # Buscar informações do usuário
+    # Buscar informações do usuário autenticado
     try:
         user_info = sp.current_user()
-        st.success(f"✅ Usuário autenticado como: **{user_info['display_name']}**")
-        st.write(f"📧 **Email:** {user_info.get('email', 'Não disponível')}")
+        st.write(f"👤 **Usuário autenticado como:** {user_info['display_name']}")
+        st.write(f"📧 **Email:** {user_info.get('email', 'Email não disponível')}")
     except Exception as e:
-        st.error("Erro ao buscar informações do usuário. Certifique-se de que está autenticado.")
+        st.error("Erro ao buscar informações do usuário.")
         st.error(str(e))
         return
 
@@ -105,7 +126,13 @@ def main():
         st.subheader("📊 Popularidade das Top 10 Músicas")
         plot_pie_chart(top_tracks_df)
     else:
-        st.warning("⚠️ Não foi possível encontrar músicas mais ouvidas no seu histórico.")
+        st.warning("⚠️ Parece que você não tem um histórico de músicas mais ouvidas recentemente.")
+
+    # Dar a opção de logout
+    if st.button("🔒 Logout"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.warning("Você foi desconectado! Atualize a página para realizar o login novamente.")
 
 
 # Executando a aplicação
