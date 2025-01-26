@@ -5,8 +5,8 @@ from spotipy.oauth2 import SpotifyOAuth
 import matplotlib.pyplot as plt
 
 # Configurações do OAuth Spotify
-SPOTIFY_CLIENT_ID = "fa95b32491d048ae9762bf882e9c33c9"  # Substitua pelo seu Client ID
-SPOTIFY_CLIENT_SECRET = "7dfc7349c85f44f3b1d6d36cf93c5541"  # Substitua pelo seu Client Secret
+SPOTIFY_CLIENT_ID = "SEU_CLIENT_ID"  # Substitua pelo seu Client ID
+SPOTIFY_CLIENT_SECRET = "SEU_CLIENT_SECRET"  # Substitua pelo seu Client Secret
 SPOTIFY_REDIRECT_URI = "http://localhost:8501"  # Certifique-se de usar este Redirect URI
 SCOPE = "user-top-read"  # Escopo necessário para acessar músicas mais ouvidas do usuário
 
@@ -97,7 +97,7 @@ def main():
                 sp = authenticate_user()
                 st.session_state["spotify_client"] = sp
                 st.session_state["authenticated"] = True
-                st.query_params.(page="home")  # Atualiza estado para trocar a página
+                st.query_params(page="home")  # Atualiza estado para trocar a página
             except Exception as e:
                 st.error("Erro durante o processo de login. Tente novamente.")
                 st.error(str(e))
