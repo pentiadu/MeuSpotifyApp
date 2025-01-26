@@ -97,7 +97,7 @@ def main():
                 sp = authenticate_user()
                 st.session_state["spotify_client"] = sp
                 st.session_state["authenticated"] = True
-                st.experimental_set_query_params(page="home")  # Atualiza estado para trocar a página
+                st.query_params.(page="home")  # Atualiza estado para trocar a página
             except Exception as e:
                 st.error("Erro durante o processo de login. Tente novamente.")
                 st.error(str(e))
